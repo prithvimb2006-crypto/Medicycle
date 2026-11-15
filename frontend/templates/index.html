@@ -1,0 +1,463 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEDICYCLE | Medicine Intelligence</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+        <div class="brand">
+            <div class="brand-icon">M</div>
+            <div>
+                <h2>MEDICYCLE</h2>
+                <small>Medicine Intelligence</small>
+            </div>
+        </div>
+
+        <div class="nav-label">WORKSPACE</div>
+
+        <nav>
+            <a class="nav-item active" href="#" data-page="dashboard">
+                ▦ Dashboard
+            </a>
+
+            <a class="nav-item" href="#" data-page="medicines">
+                ✚ Medicines
+            </a>
+
+            <a class="nav-item" href="#" data-page="safety">
+                ♡ Safety & Interactions
+            </a>
+
+            <a class="nav-item" href="#" data-page="recalls">
+                ⚠ Recalls & Alerts
+            </a>
+
+            <a class="nav-item" href="#" data-page="batches">
+                ▤ Batch Management
+            </a>
+
+            <a class="nav-item" href="#" data-page="admin" id="admin-nav" style="display:none;">
+                ⚙ Admin Management
+            </a>
+        </nav>
+
+        <div class="nav-label">SYSTEM</div>
+
+        <nav>
+            <a class="nav-item" href="#" data-page="profile">
+                ◉ My Profile
+            </a>
+        </nav>
+
+        <div class="sidebar-bottom">
+
+            <div class="user-card">
+                <div class="avatar" id="user-avatar">U</div>
+
+                <div class="user-info">
+                    <strong id="user-name">Loading...</strong>
+                    <small id="user-role">Checking session</small>
+                </div>
+            </div>
+
+            <button id="logout-btn" class="logout-btn">
+                ↪ Sign out
+            </button>
+
+        </div>
+
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+        <!-- TOPBAR -->
+        <header class="topbar">
+
+            <div>
+                <div class="breadcrumb">
+                    Workspace / <span id="breadcrumb">Dashboard</span>
+                </div>
+
+                <h1 id="page-title">Dashboard Overview</h1>
+            </div>
+
+            <div class="topbar-right">
+                <span class="status-indicator"></span>
+                <span>System Online</span>
+            </div>
+
+        </header>
+
+        <!-- DASHBOARD -->
+        <section id="dashboard-page" class="page active">
+
+            <div class="welcome">
+                <div>
+                    <h2>Medicine Intelligence Dashboard</h2>
+                    <p>
+                        Monitor medicine safety, inventory and lifecycle information.
+                    </p>
+                </div>
+
+                <span class="date-label" id="current-date"></span>
+            </div>
+
+            <div class="stats-grid">
+
+                <div class="stat-card">
+                    <span>Total Medicines</span>
+                    <h2 id="total-medicines">--</h2>
+                    <small>Active catalogue records</small>
+                </div>
+
+                <div class="stat-card">
+                    <span>Active Recalls</span>
+                    <h2 id="total-recalls">--</h2>
+                    <small>Recall records</small>
+                </div>
+
+                <div class="stat-card">
+                    <span>Total Batches</span>
+                    <h2 id="total-batches">--</h2>
+                    <small>Tracked inventory batches</small>
+                </div>
+
+                <div class="stat-card">
+                    <span>Expiring Soon</span>
+                    <h2 id="expiring-batches">--</h2>
+                    <small>Within the next 30 days</small>
+                </div>
+
+            </div>
+
+            <div class="content-grid">
+
+                <div class="panel">
+
+                    <div class="panel-header">
+                        <h3>Recent Medicines</h3>
+                        <button class="text-button" data-page="medicines">
+                            View all →
+                        </button>
+                    </div>
+
+                    <div id="recent-medicines" class="table-container">
+                        Loading medicines...
+                    </div>
+
+                </div>
+
+                <div class="panel">
+
+                    <div class="panel-header">
+                        <h3>System Overview</h3>
+                    </div>
+
+                    <div class="system-item">
+                        <span>Backend API</span>
+                        <strong class="healthy">Connected</strong>
+                    </div>
+
+                    <div class="system-item">
+                        <span>Database</span>
+                        <strong class="healthy">Connected</strong>
+                    </div>
+
+                    <div class="system-item">
+                        <span>Authentication</span>
+                        <strong class="healthy">Active</strong>
+                    </div>
+
+                    <div class="system-item">
+                        <span>Current Role</span>
+                        <strong id="overview-role">--</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- MEDICINES -->
+        <section id="medicines-page" class="page">
+
+            <div class="panel">
+
+                <div class="panel-header">
+                    <h3>Medicine Catalogue</h3>
+                </div>
+
+                <input
+                    id="medicine-search"
+                    class="search-input"
+                    placeholder="Search brand, generic name or manufacturer..."
+                >
+
+                <div id="medicine-results" class="table-container">
+                    Loading catalogue...
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- SAFETY -->
+        <section id="safety-page" class="page">
+
+            <div class="panel">
+
+                <h3>Medicine Safety & Interactions</h3>
+
+                <p>
+                    Search for a medicine to inspect its documented safety information.
+                </p>
+
+                <input
+                    id="safety-id"
+                    class="search-input"
+                    type="number"
+                    placeholder="Enter medicine ID"
+                >
+
+                <button id="safety-search" class="primary-btn">
+                    Check Safety
+                </button>
+
+                <div id="safety-results"></div>
+
+            </div>
+
+        </section>
+
+        <!-- RECALLS -->
+        <section id="recalls-page" class="page">
+
+            <div class="panel">
+
+                <h3>Recall Monitoring</h3>
+
+                <div id="recall-results">
+                    Loading recall records...
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- BATCHES -->
+        <section id="batches-page" class="page">
+
+            <div class="panel">
+
+                <h3>Batch Management</h3>
+
+                <div id="batch-results">
+                    Loading batch records...
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- PROFILE -->
+        <section id="profile-page" class="page">
+
+            <div class="panel">
+
+                <h3>My Profile</h3>
+
+                <div id="profile-details"></div>
+
+            </div>
+
+        </section>
+
+        <!-- ADMIN MANAGEMENT -->
+        <section id="admin-page" class="page">
+
+            <!-- USER MANAGEMENT -->
+            <div class="panel">
+
+                <div class="panel-header">
+                    <h3>User Management</h3>
+
+                    <button
+                        class="primary-btn"
+                        id="refresh-users"
+                        type="button"
+                    >
+                        Refresh Users
+                    </button>
+                </div>
+
+                <p>
+                    Review registrations and manage staff account access.
+                </p>
+
+                <div id="admin-users" class="table-container">
+                    Loading users...
+                </div>
+
+            </div>
+
+            <!-- MEDICINE MANAGEMENT -->
+            <div class="panel">
+
+                <div class="panel-header">
+                    <h3>Medicine Management</h3>
+                </div>
+
+                <p>
+                    Add, update and deactivate medicines in the catalogue.
+                </p>
+
+                <form id="medicine-form">
+
+                    <input
+                        type="hidden"
+                        id="edit-medicine-id"
+                    >
+
+                    <div class="form-grid">
+
+                        <input
+                            id="med-brand"
+                            type="text"
+                            placeholder="Brand name"
+                            required
+                        >
+
+                        <input
+                            id="med-generic"
+                            type="text"
+                            placeholder="Generic name"
+                            required
+                        >
+
+                        <input
+                            id="med-category"
+                            type="number"
+                            min="1"
+                            placeholder="Category ID"
+                            required
+                        >
+
+                        <input
+                            id="med-manufacturer"
+                            type="number"
+                            min="1"
+                            placeholder="Manufacturer ID"
+                            required
+                        >
+
+                        <select id="med-form" required>
+                            <option value="">Select dosage form</option>
+                            <option value="TABLET">Tablet</option>
+                            <option value="CAPSULE">Capsule</option>
+                            <option value="SYRUP">Syrup</option>
+                            <option value="INJECTION">Injection</option>
+                            <option value="OINTMENT">Ointment</option>
+                            <option value="DROPS">Drops</option>
+                            <option value="INHALER">Inhaler</option>
+                            <option value="PATCH">Patch</option>
+                        </select>
+
+                        <input
+                            id="med-strength"
+                            type="text"
+                            placeholder="Strength (e.g. 500 mg)"
+                            required
+                        >
+
+                        <input
+                            id="med-route"
+                            type="text"
+                            placeholder="Administration route"
+                            required
+                        >
+
+                        <select id="med-classification">
+                            <option value="PRESCRIPTION_ONLY">
+                                Prescription only
+                            </option>
+
+                            <option value="OTC">
+                                Over the counter
+                            </option>
+
+                            <option value="CONTROLLED_SUBSTANCE">
+                                Controlled substance
+                            </option>
+                        </select>
+
+                        <input
+                            id="med-barcode"
+                            type="text"
+                            placeholder="Barcode (optional)"
+                        >
+
+                        <input
+                            id="med-ndc"
+                            type="text"
+                            placeholder="NDC number (optional)"
+                        >
+
+                    </div>
+
+                    <div style="margin-top:20px;">
+
+                        <button
+                            type="submit"
+                            class="primary-btn"
+                            id="save-medicine"
+                        >
+                            Add Medicine
+                        </button>
+
+                        <button
+                            type="button"
+                            class="text-button"
+                            id="cancel-medicine-edit"
+                        >
+                            Cancel
+                        </button>
+
+                    </div>
+
+                </form>
+
+                <div
+                    id="admin-medicines"
+                    class="table-container"
+                    style="margin-top:25px;"
+                >
+                    Loading medicines...
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- NOTIFICATIONS -->
+        <div id="notification" class="notification"></div>
+
+    </main>
+
+</div>
+
+<!-- APPLICATION JAVASCRIPT -->
+<script src="/static/js/app.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,39 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Environment and sensitive credentials
+.env
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# IDEs
+.vscode/
+.idea/
+
+# Database backups and temporary dumps
+database/backups/*.dump
+database/backups/*.sql.gz
+*.log
+uploads/
+
+# Local database backups
+backups/
+database/backups/
+
+# Session cookies
+cookies*.txt
+student_cookies.txt
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
