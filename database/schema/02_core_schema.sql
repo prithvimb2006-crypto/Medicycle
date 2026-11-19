@@ -1,17 +1,8 @@
--- ==============================================================================
--- MEDICYCLE: Medicine Intelligence, Safety & Lifecycle Ecosystem
--- Relational Schema DDL Script (Normalized to 3NF / BCNF)
--- File: database/schema/02_core_schema.sql
--- ==============================================================================
 
 USE medicycle_db;
 
--- Disable foreign key checks during schema re-creation if needed
 SET FOREIGN_KEY_CHECKS = 0;
 
--- ------------------------------------------------------------------------------
--- 1. Source References (Traceability & Clinical Attributions)
--- ------------------------------------------------------------------------------
 DROP TABLE IF EXISTS source_references;
 CREATE TABLE source_references (
     reference_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -25,9 +16,7 @@ CREATE TABLE source_references (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------------------------
--- 2. Users (Role-Based Access Control)
--- ------------------------------------------------------------------------------
+
 DROP TABLE IF EXISTS users;
 CREATE TABLE users (
     user_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -42,9 +31,6 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------------------------
--- 3. Medicine Categories (Therapeutic & ATC Classification)
--- ------------------------------------------------------------------------------
 DROP TABLE IF EXISTS categories;
 CREATE TABLE categories (
     category_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -54,9 +40,6 @@ CREATE TABLE categories (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------------------------
--- 4. Manufacturers (Pharmaceutical Producers)
--- ------------------------------------------------------------------------------
 DROP TABLE IF EXISTS manufacturers;
 CREATE TABLE manufacturers (
     manufacturer_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -69,9 +52,6 @@ CREATE TABLE manufacturers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------------------------
--- 5. Ingredients (Active Pharmaceutical Ingredients - API)
--- ------------------------------------------------------------------------------
 DROP TABLE IF EXISTS ingredients;
 CREATE TABLE ingredients (
     ingredient_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -85,9 +65,6 @@ CREATE TABLE ingredients (
     CONSTRAINT fk_ing_ref FOREIGN KEY (reference_id) REFERENCES source_references(reference_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------------------------
--- 6. Medicines (Core Entity - Medicine Digital Passport Anchor)
--- ------------------------------------------------------------------------------
 DROP TABLE IF EXISTS medicines;
 CREATE TABLE medicines (
     medicine_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -113,9 +90,6 @@ CREATE TABLE medicines (
     INDEX idx_med_barcode (barcode_upc)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------------------------
--- 7. Medicine Compositions (Junction: Medicine <-> Ingredients)
--- ------------------------------------------------------------------------------
 DROP TABLE IF EXISTS medicine_compositions;
 CREATE TABLE medicine_compositions (
     composition_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -129,9 +103,6 @@ CREATE TABLE medicine_compositions (
     CONSTRAINT uq_comp_med_ing UNIQUE (medicine_id, ingredient_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------------------------
--- 8. Medicine Uses (Approved Clinical Indications)
--- ------------------------------------------------------------------------------
 DROP TABLE IF EXISTS medicine_uses;
 CREATE TABLE medicine_uses (
     use_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -144,9 +115,6 @@ CREATE TABLE medicine_uses (
     CONSTRAINT fk_use_ref FOREIGN KEY (reference_id) REFERENCES source_references(reference_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------------------------
--- 9. Medicine Batches (Shelf-Life & Expiry Intelligence)
--- ------------------------------------------------------------------------------
 DROP TABLE IF EXISTS medicine_batches;
 CREATE TABLE medicine_batches (
     batch_id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

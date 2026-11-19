@@ -1,14 +1,4 @@
--- ==============================================================================
--- MEDICYCLE: Medicine Intelligence, Safety & Lifecycle Ecosystem
--- Demo Simulation Seed Data Script (Non-Production Testing & UI Staging Only)
--- File: database/seeds/02_demo_clinical_simulation_seed.sql
--- ==============================================================================
--- WARNING: 
--- The records in this file are STRICTLY SYNTHETIC AND FICTIONAL SIMULATIONS.
--- They are designed solely for staging UI screens, testing cold-chain alerts,
--- and validating OCR pipelines. They must NEVER be treated as certified clinical,
--- regulatory, or laboratory compliance records.
--- ==============================================================================
+
 
 USE medicycle_db;
 

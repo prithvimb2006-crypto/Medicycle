@@ -1,9 +1,7 @@
 
 import os
-
 from flask import Flask, jsonify, render_template
 from mysql.connector import Error
-
 from backend.config import Config
 from backend.database.connection import get_db_connection
 
