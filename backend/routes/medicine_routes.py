@@ -1,7 +1,6 @@
 from backend.utils.auth import permission_required
-from mysql.connector import Error
-from flask import Blueprint, jsonify, request
-from mysql.connector import Error
+from flask import Blueprint, jsonify, request, current_app
+from mysql.connector import Error, IntegrityError
 
 from backend.database.connection import get_db_connection
 
@@ -110,6 +109,8 @@ def get_medicine_details(medicine_id):
                 m.barcode_upc,
                 m.ndc_number,
                 m.is_active,
+                m.category_id,
+                m.manufacturer_id,
                 c.category_name,
                 mf.name AS manufacturer_name,
                 mf.country AS manufacturer_country,
@@ -200,6 +201,17 @@ def get_medicine_details(medicine_id):
         if connection and connection.is_connected():
             connection.close()
 
+def _text(value):
+    return str(value).strip() if value is not None else ""
+
+
+def _number(value):
+    """Blank -> None, otherwise float. Raises ValueError for bad input."""
+    if value is None or str(value).strip() == "":
+        return None
+    return float(value)
+
+
 @medicine_bp.route("", methods=["POST"])
 @permission_required("CATALOG_WRITE")
 def create_medicine():
@@ -210,13 +222,22 @@ def create_medicine():
         "manufacturer_id", "dosage_form", "strength",
         "administration_route"
     ]
-
     missing = [field for field in required if not data.get(field)]
     if missing:
         return jsonify({
             "success": False,
             "message": "Missing fields: " + ", ".join(missing)
         }), 400
+
+    ingredients = data.get("ingredients") or []
+    uses = data.get("uses") or []
+    side_effects = data.get("side_effects") or []
+    contraindications = data.get("contraindications") or []
+    storage = data.get("storage") or None
+
+    if not all(isinstance(x, list) for x in
+               (ingredients, uses, side_effects, contraindications)):
+        return jsonify({"success": False, "message": "Invalid request format."}), 400
 
     connection = None
     cursor = None
@@ -247,19 +268,111 @@ def create_medicine():
             )
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
-            data["brand_name"].strip(),
-            data["generic_name"].strip(),
+            _text(data["brand_name"]),
+            _text(data["generic_name"]),
             data["category_id"],
             data["manufacturer_id"],
-            data["dosage_form"],
-            data["strength"].strip(),
-            data["administration_route"].strip(),
-            data.get("prescription_classification", "PRESCRIPTION_ONLY"),
-            data.get("barcode_upc") or None,
-            data.get("ndc_number") or None
+            _text(data["dosage_form"]),
+            _text(data["strength"]),
+            _text(data["administration_route"]),
+            _text(data.get("prescription_classification")) or "PRESCRIPTION_ONLY",
+            _text(data.get("barcode_upc")) or None,
+            _text(data.get("ndc_number")) or None
         ))
-
         medicine_id = cursor.lastrowid
+
+        # Ingredients: reuse an existing ingredient by name, otherwise create it
+        for ing in ingredients:
+            name = _text(ing.get("name"))
+            if not name:
+                continue
+
+            cursor.execute(
+                "SELECT ingredient_id FROM ingredients "
+                "WHERE LOWER(generic_name) = LOWER(%s) LIMIT 1",
+                (name,)
+            )
+            row = cursor.fetchone()
+            if row:
+                ingredient_id = row["ingredient_id"]
+            else:
+                cursor.execute(
+                    "INSERT INTO ingredients (generic_name, drug_class) VALUES (%s, %s)",
+                    (name, _text(ing.get("drug_class")) or None)
+                )
+                ingredient_id = cursor.lastrowid
+
+            cursor.execute("""
+                INSERT INTO medicine_compositions
+                    (medicine_id, ingredient_id, strength_value,
+                     strength_unit, is_active_ingredient)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (
+                medicine_id, ingredient_id,
+                _number(ing.get("strength_value")),
+                _text(ing.get("strength_unit")) or None,
+                1 if ing.get("is_active", True) else 0
+            ))
+
+        for use in uses:
+            indication = _text(use.get("indication"))
+            if indication:
+                cursor.execute("""
+                    INSERT INTO medicine_uses
+                        (medicine_id, indication, target_condition, is_fda_approved)
+                    VALUES (%s, %s, %s, %s)
+                """, (
+                    medicine_id, indication,
+                    _text(use.get("target_condition")) or None,
+                    1 if use.get("is_fda_approved") else 0
+                ))
+
+        if storage:
+            cursor.execute("""
+                INSERT INTO storage_rules
+                    (medicine_id, min_temp_celsius, max_temp_celsius,
+                     requires_refrigeration, light_sensitive, moisture_sensitive,
+                     storage_instructions, excursion_limit_hours)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                medicine_id,
+                _number(storage.get("min_temp_celsius")),
+                _number(storage.get("max_temp_celsius")),
+                1 if storage.get("requires_refrigeration") else 0,
+                1 if storage.get("light_sensitive") else 0,
+                1 if storage.get("moisture_sensitive") else 0,
+                _text(storage.get("storage_instructions")) or None,
+                _number(storage.get("excursion_limit_hours"))
+            ))
+
+        for se in side_effects:
+            reaction = _text(se.get("adverse_reaction"))
+            if reaction:
+                cursor.execute("""
+                    INSERT INTO side_effects
+                        (medicine_id, adverse_reaction, frequency,
+                         severity, requires_medical_attention)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    medicine_id, reaction,
+                    _text(se.get("frequency")) or None,
+                    _text(se.get("severity")).upper() or "MODERATE",
+                    1 if se.get("requires_medical_attention") else 0
+                ))
+
+        for ci in contraindications:
+            condition = _text(ci.get("condition_name"))
+            if condition:
+                cursor.execute("""
+                    INSERT INTO contraindications
+                        (medicine_id, condition_name, type, clinical_rationale)
+                    VALUES (%s, %s, %s, %s)
+                """, (
+                    medicine_id, condition,
+                    _text(ci.get("type")).upper() or "ABSOLUTE",
+                    _text(ci.get("clinical_rationale")) or None
+                ))
+
         connection.commit()
 
         return jsonify({
@@ -268,10 +381,30 @@ def create_medicine():
             "medicine_id": medicine_id
         }), 201
 
-    except Error as error:
+    except ValueError:
         if connection:
             connection.rollback()
-        return jsonify({"success": False, "message": str(error)}), 500
+        return jsonify({
+            "success": False,
+            "message": "Strength, temperature and hour values must be numbers."
+        }), 400
+
+    except IntegrityError:
+        if connection:
+            connection.rollback()
+        return jsonify({
+            "success": False,
+            "message": "Duplicate value: barcode, NDC number or a repeated ingredient already exists."
+        }), 409
+
+    except Error:
+        if connection:
+            connection.rollback()
+        current_app.logger.exception("create_medicine failed")
+        return jsonify({
+            "success": False,
+            "message": "Could not save the medicine. Check the values and try again."
+        }), 500
 
     finally:
         if cursor:
@@ -344,10 +477,16 @@ def update_medicine(medicine_id):
         connection.commit()
         return jsonify({"success": True, "message": "Medicine updated successfully."})
 
-    except Error as error:
+    except IntegrityError:
         if connection:
             connection.rollback()
-        return jsonify({"success": False, "message": str(error)}), 500
+        return jsonify({"success": False, "message": "Duplicate barcode or NDC number."}), 409
+
+    except Error:
+        if connection:
+            connection.rollback()
+        current_app.logger.exception("medicine write failed")
+        return jsonify({"success": False, "message": "Could not save changes. Check the values and try again."}), 500
 
     finally:
         if cursor:
@@ -385,10 +524,16 @@ def deactivate_medicine(medicine_id):
             "message": "Medicine deactivated successfully."
         })
 
-    except Error as error:
+    except IntegrityError:
         if connection:
             connection.rollback()
-        return jsonify({"success": False, "message": str(error)}), 500
+        return jsonify({"success": False, "message": "Duplicate barcode or NDC number."}), 409
+
+    except Error:
+        if connection:
+            connection.rollback()
+        current_app.logger.exception("medicine write failed")
+        return jsonify({"success": False, "message": "Could not save changes. Check the values and try again."}), 500
 
     finally:
         if cursor:

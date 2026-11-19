@@ -10,6 +10,7 @@ from backend.routes.batch_routes import batch_bp
 from backend.routes.recall_routes import recall_bp
 from backend.routes.safety_routes import safety_bp
 from backend.routes.medicine_routes import medicine_bp
+from backend.routes.catalog_routes import catalog_bp
 
 
 # Project root directory
@@ -38,6 +39,7 @@ def create_app():
     app.register_blueprint(recall_bp, url_prefix="/api")
     app.register_blueprint(batch_bp, url_prefix="/api")
     app.register_blueprint(auth_bp)
+    app.register_blueprint(catalog_bp)
 
     # Frontend dashboard
     @app.route("/")

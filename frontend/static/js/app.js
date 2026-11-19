@@ -260,7 +260,7 @@ async function openMedicine(id) {
   const writer = WRITE_ROLES.includes(S.user.role);
   $('modal-footer').insertAdjacentHTML('afterbegin', `
     ${writer ? `<button id="deact-btn" onclick="deactivateMed(${id}, this)" class="btn-ghost px-3.5 py-1.5 text-xs font-mono rounded-sm hover:!text-crimson-bright">DEACTIVATE</button>
-    <button onclick='openMedForm(${id}, ${JSON.stringify({ brand_name: m.brand_name, generic_name: m.generic_name, dosage_form: m.dosage_form, strength: m.strength, administration_route: m.administration_route, prescription_classification: m.prescription_classification, barcode_upc: m.barcode_upc, ndc_number: m.ndc_number }).replace(/'/g, '&#39;')})' class="btn-ghost px-3.5 py-1.5 text-xs font-mono rounded-sm">EDIT</button>` : ''}
+    <button onclick='openMedForm(${id}, ${JSON.stringify({ category_id: m.category_id, manufacturer_id: m.manufacturer_id, brand_name: m.brand_name, generic_name: m.generic_name, dosage_form: m.dosage_form, strength: m.strength, administration_route: m.administration_route, prescription_classification: m.prescription_classification, barcode_upc: m.barcode_upc, ndc_number: m.ndc_number }).replace(/'/g, '&#39;')})' class="btn-ghost px-3.5 py-1.5 text-xs font-mono rounded-sm">EDIT</button>` : ''}
     <button onclick="closeModal(); navigateTo('safety', ${id})" class="btn-crimson px-4 py-1.5 text-xs font-display font-bold tracking-wider uppercase text-white rounded-sm">View safety →</button>`);
 }
 
@@ -271,31 +271,115 @@ async function deactivateMed(id, btn) {
   if (r.ok) { closeModal(); S.meds = null; renderPage(); }
 }
 
-function openMedForm(id = null, d = {}) {
-  const f = (name, label, opts = {}) => `<div class="${opts.wide ? 'sm:col-span-2' : ''}"><label class="lbl" for="mf-${name}">${label}</label>
-    <input id="mf-${name}" name="${name}" class="field" value="${esc(d[name] ?? '')}" ${opts.req === false ? '' : 'required'} ${opts.type ? `type="${opts.type}" min="1"` : ''} ${opts.list ? `list="${opts.list}"` : ''} ${opts.ph ? `placeholder="${opts.ph}"` : ''}></div>`;
-  openModal(id ? `EDIT // MED-${id}` : 'NEW MEDICINE', `
-    <form id="med-form" onsubmit="submitMedForm(event, ${id})" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+/* ---- Add / edit medicine form ---- */
+let LOOKUPS = null;
+async function loadLookups() {
+  if (LOOKUPS) return LOOKUPS;
+  const [c, m] = await Promise.all([api('/api/catalog/categories'), api('/api/catalog/manufacturers')]);
+  if (c.ok && m.ok) LOOKUPS = { categories: c.data.data, manufacturers: m.data.data };
+  return LOOKUPS;
+}
+
+const CORE_FIELDS = ['brand_name', 'generic_name', 'category_id', 'manufacturer_id', 'dosage_form', 'strength', 'administration_route', 'prescription_classification', 'barcode_upc', 'ndc_number'];
+const ROW_KEY = { ing: 'name', use: 'indication', se: 'adverse_reaction', ci: 'condition_name' };
+const rmBtn = `<button type="button" onclick="this.closest('[data-row]').remove()" class="btn-ghost px-2.5 rounded-sm self-start" aria-label="Remove row">✕</button>`;
+const opts = (arr, sel = '') => arr.map(v => `<option ${v === sel ? 'selected' : ''}>${v}</option>`).join('');
+const chk = (name, label, on = false) => `<label class="flex items-center gap-2 text-xs text-steelGray"><input type="checkbox" name="${name}" ${on ? 'checked' : ''}> ${label}</label>`;
+
+const ROW_HTML = {
+  ing: () => `<div data-row class="grid grid-cols-2 sm:grid-cols-12 gap-2 p-3 bg-obsidian border border-borderSubtle rounded-sm">
+    <input name="name" class="field sm:col-span-4" placeholder="Ingredient, e.g. Amoxicillin">
+    <input name="drug_class" class="field sm:col-span-3" placeholder="Drug class">
+    <input name="strength_value" type="number" step="any" min="0" class="field sm:col-span-2" placeholder="Amount">
+    <select name="strength_unit" class="field sm:col-span-2">${opts(['mg', 'mcg', 'g', 'mL', 'IU', '%'])}</select>
+    <div class="sm:col-span-1 flex justify-end">${rmBtn}</div>
+    <div class="col-span-full">${chk('is_active', 'Active ingredient', true)}</div></div>`,
+  use: () => `<div data-row class="grid grid-cols-1 sm:grid-cols-12 gap-2 p-3 bg-obsidian border border-borderSubtle rounded-sm">
+    <input name="indication" class="field sm:col-span-6" placeholder="Indication, e.g. Treatment of sinusitis">
+    <input name="target_condition" class="field sm:col-span-4" placeholder="Condition, e.g. Bacterial infections">
+    <div class="sm:col-span-2 flex items-center justify-between gap-2">${chk('is_fda_approved', 'FDA approved')}${rmBtn}</div></div>`,
+  se: () => `<div data-row class="grid grid-cols-2 sm:grid-cols-12 gap-2 p-3 bg-obsidian border border-borderSubtle rounded-sm">
+    <input name="adverse_reaction" class="field col-span-2 sm:col-span-5" placeholder="Reaction, e.g. Nausea">
+    <input name="frequency" list="dl-freq" class="field sm:col-span-3" placeholder="Frequency">
+    <select name="severity" class="field sm:col-span-3">${opts(['MILD', 'MODERATE', 'SEVERE', 'LIFE_THREATENING'], 'MODERATE')}</select>
+    <div class="sm:col-span-1 flex justify-end">${rmBtn}</div>
+    <div class="col-span-full">${chk('requires_medical_attention', 'Requires medical attention')}</div></div>`,
+  ci: () => `<div data-row class="grid grid-cols-2 sm:grid-cols-12 gap-2 p-3 bg-obsidian border border-borderSubtle rounded-sm">
+    <input name="condition_name" class="field col-span-2 sm:col-span-6" placeholder="Condition, e.g. Active peptic ulcer">
+    <select name="type" class="field sm:col-span-4">${opts(['ABSOLUTE', 'RELATIVE'])}</select>
+    <div class="sm:col-span-2 flex justify-end">${rmBtn}</div>
+    <textarea name="clinical_rationale" rows="2" class="field col-span-full" placeholder="Clinical rationale"></textarea></div>`
+};
+const addRow = k => $('rows-' + k).insertAdjacentHTML('beforeend', ROW_HTML[k]());
+const rowSection = (k, title, addLabel) => `<div><div class="flex items-center justify-between mb-2">
+  <div class="font-mono text-[11px] text-bioAmber uppercase tracking-wider">${title}</div>
+  <button type="button" onclick="addRow('${k}')" class="btn-ghost px-2.5 py-1 text-xs font-mono rounded-sm">+ ${addLabel}</button></div>
+  <div id="rows-${k}" class="space-y-2"></div></div>`;
+const collectRows = k => [...document.querySelectorAll(`#rows-${k} [data-row]`)].map(r => {
+  const o = {}; r.querySelectorAll('[name]').forEach(el => { o[el.name] = el.type === 'checkbox' ? el.checked : el.value.trim(); }); return o;
+}).filter(o => o[ROW_KEY[k]]);
+
+async function openMedForm(id = null, d = {}) {
+  openModal(id ? `EDIT // MED-${id}` : 'NEW MEDICINE', loading);
+  const L = await loadLookups();
+  if (!L) { $('modal-body').innerHTML = note('Could not load categories and manufacturers. Check that the /api/catalog routes are registered and you have CATALOG_WRITE permission.', 'bad'); return; }
+  const f = (name, label, o = {}) => `<div class="${o.wide ? 'sm:col-span-2' : ''}"><label class="lbl" for="mf-${name}">${label}</label>
+    <input id="mf-${name}" name="${name}" class="field" value="${esc(d[name] ?? '')}" ${o.req === false ? '' : 'required'} ${o.list ? `list="${o.list}"` : ''} ${o.ph ? `placeholder="${o.ph}"` : ''}></div>`;
+  const sel = (name, label, items, key, text) => `<div><label class="lbl" for="mf-${name}">${label}</label>
+    <select id="mf-${name}" name="${name}" class="field" required><option value="">Select…</option>
+    ${items.map(x => `<option value="${x[key]}" ${String(d[name]) === String(x[key]) ? 'selected' : ''}>#${x[key]} — ${esc(text(x))}</option>`).join('')}</select></div>`;
+  const sh = t => `<div class="font-mono text-[11px] text-crimson-bright uppercase tracking-wider border-b border-borderSubtle pb-1.5">${t}</div>`;
+
+  $('modal-body').innerHTML = `<form id="med-form" onsubmit="submitMedForm(event, ${id})" class="space-y-6">
+    ${sh('Basic information')}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       ${f('brand_name', 'Brand name')}${f('generic_name', 'Generic name')}
-      ${f('category_id', 'Category ID', { type: 'number' })}${f('manufacturer_id', 'Manufacturer ID', { type: 'number' })}
-      ${f('dosage_form', 'Dosage form', { list: 'dl-form', ph: 'TABLET' })}${f('strength', 'Strength', { ph: '500 mg' })}
-      ${f('administration_route', 'Route', { ph: 'ORAL' })}${f('prescription_classification', 'Classification', { list: 'dl-class', req: false, ph: 'PRESCRIPTION_ONLY' })}
+      ${sel('category_id', 'Category', L.categories, 'category_id', c => c.category_name)}
+      ${sel('manufacturer_id', 'Manufacturer', L.manufacturers, 'manufacturer_id', m => m.name + (m.country ? ` (${m.country})` : ''))}
+      ${f('dosage_form', 'Dosage form', { list: 'dl-form', ph: 'TABLET' })}${f('strength', 'Strength', { ph: '625 mg' })}
+      ${f('administration_route', 'Route', { ph: 'Oral' })}${f('prescription_classification', 'Classification', { list: 'dl-class', req: false, ph: 'PRESCRIPTION_ONLY' })}
       ${f('barcode_upc', 'Barcode (UPC)', { req: false })}${f('ndc_number', 'NDC number', { req: false })}
-      ${id ? '<div class="sm:col-span-2 text-xs text-bioAmber font-mono">Re-enter category and manufacturer IDs — the API does not return them for editing.</div>' : ''}
-      <datalist id="dl-form"><option>TABLET<option>CAPSULE<option>INJECTION<option>SYRUP<option>OINTMENT</datalist>
-      <datalist id="dl-class"><option>PRESCRIPTION_ONLY<option>OVER_THE_COUNTER</datalist>
-      <div id="mf-err" class="sm:col-span-2 hidden text-xs font-mono text-crimson-bright"></div>
-    </form>`,
-    `<button type="submit" form="med-form" class="btn-crimson px-4 py-1.5 text-xs font-display font-bold tracking-wider uppercase text-white rounded-sm">${id ? 'Save changes' : 'Add medicine'}</button>`);
+    </div>
+    ${id ? '<div class="text-xs text-bioAmber font-mono">Editing updates the basic information only. Ingredients, uses, storage and safety data are not changed here.</div>' : `
+    ${sh('Ingredients')}${rowSection('ing', 'Composition', 'Add ingredient')}
+    ${sh('Documented uses')}${rowSection('use', 'Indications', 'Add use')}
+    ${sh('Storage')}
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <div><label class="lbl" for="mf-min">Min temp (°C)</label><input id="mf-min" name="min_temp_celsius" type="number" step="any" class="field"></div>
+      <div><label class="lbl" for="mf-max">Max temp (°C)</label><input id="mf-max" name="max_temp_celsius" type="number" step="any" class="field"></div>
+      <div class="col-span-2 sm:col-span-1"><label class="lbl" for="mf-exc">Excursion limit (hours)</label><input id="mf-exc" name="excursion_limit_hours" type="number" step="any" min="0" class="field"></div>
+      <div class="col-span-full flex flex-wrap gap-x-6 gap-y-2">${chk('requires_refrigeration', 'Requires refrigeration')}${chk('light_sensitive', 'Light sensitive')}${chk('moisture_sensitive', 'Moisture sensitive')}</div>
+      <div class="col-span-full"><label class="lbl" for="mf-si">Storage instructions</label><textarea id="mf-si" name="storage_instructions" rows="2" class="field" placeholder="e.g. Store in original foil packaging."></textarea></div>
+    </div>
+    ${sh('Side effects')}${rowSection('se', 'Adverse reactions', 'Add side effect')}
+    ${sh('Contraindications')}${rowSection('ci', 'Conditions to avoid', 'Add contraindication')}`}
+    <datalist id="dl-form"><option>TABLET<option>CAPSULE<option>INJECTION<option>SYRUP<option>OINTMENT</datalist>
+    <datalist id="dl-class"><option>PRESCRIPTION_ONLY<option>OVER_THE_COUNTER</datalist>
+    <datalist id="dl-freq"><option>VERY_COMMON<option>COMMON<option>UNCOMMON<option>RARE<option>VERY_RARE</datalist>
+    <div id="mf-err" class="hidden text-xs font-mono text-crimson-bright"></div></form>`;
+  $('modal-footer').insertAdjacentHTML('afterbegin', `<button type="submit" form="med-form" id="mf-submit" class="btn-crimson px-4 py-1.5 text-xs font-display font-bold tracking-wider uppercase text-white rounded-sm">${id ? 'Save changes' : 'Add medicine'}</button>`);
+  if (!id) addRow('ing');
 }
 
 async function submitMedForm(e, id) {
   e.preventDefault();
-  const body = Object.fromEntries(new FormData(e.target).entries());
+  const form = e.target, body = {};
+  CORE_FIELDS.forEach(n => { body[n] = form.elements[n].value.trim(); });
   body.category_id = num(body.category_id); body.manufacturer_id = num(body.manufacturer_id);
+  if (!id) {
+    const t = n => form.elements[n].value.trim(), c = n => form.elements[n].checked;
+    body.ingredients = collectRows('ing'); body.uses = collectRows('use');
+    body.side_effects = collectRows('se'); body.contraindications = collectRows('ci');
+    const st = { min_temp_celsius: t('min_temp_celsius'), max_temp_celsius: t('max_temp_celsius'), excursion_limit_hours: t('excursion_limit_hours'),
+      requires_refrigeration: c('requires_refrigeration'), light_sensitive: c('light_sensitive'), moisture_sensitive: c('moisture_sensitive'), storage_instructions: t('storage_instructions') };
+    if (st.min_temp_celsius || st.max_temp_celsius || st.storage_instructions) body.storage = st;
+  }
+  $('mf-submit').disabled = true;
   const r = await api(id ? `/api/medicines/${id}` : '/api/medicines', { method: id ? 'PUT' : 'POST', body });
+  $('mf-submit').disabled = false;
   if (!r.ok) return formErr('mf-err', r.status === 403 ? 'You do not have permission to edit the catalogue.' : r.msg);
-  closeModal(); showToast(r.data.message); S.meds = null; renderPage();
+  closeModal(); showToast(r.data.message); S.meds = null; await renderPage();
+  if (!id && r.data.medicine_id) openMedicine(r.data.medicine_id);
 }
 
 /* Safety & interactions */
